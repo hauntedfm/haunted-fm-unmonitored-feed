@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: haunted-fm-unmonitored-feed
+    env: node
+    plan: starter
+    buildCommand: ""
+    startCommand: "node server.js"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MAX_CALL_SECONDS
+        value: 15
+      - key: RECEIVER_TOKEN
+        sync: false
+      - key: PUBLIC_ORIGIN
+        sync: false

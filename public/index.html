@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Haunted FM | Speak Into The Feed</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="signal-shell">
+    <main class="feed-console" aria-live="polite">
+      <header class="topline">
+        <img src="https://6a2dbb67a5cda10213c3c946--relaxed-empanada-796ca3.netlify.app/haunted-fm-logo-transparent.png" alt="Haunted FM">
+        <span>UNMONITORED FEED</span>
+      </header>
+
+      <section class="stage">
+        <p class="eyebrow">LIVE TRANSMISSION WINDOW</p>
+        <div id="durationReadout" class="duration">0.00</div>
+        <p class="seconds">SECONDS</p>
+        <p id="statusText" class="status">SIGNAL WAITING</p>
+      </section>
+
+      <section class="copy">
+        <h1>Speak Into The Feed</h1>
+        <p>No approval. No queue. If the receiver is online and the frequency is open, your voice enters the feed for fifteen seconds.</p>
+        <p class="warning">Live audio is unmonitored. One caller at a time.</p>
+      </section>
+
+      <div class="meter" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+
+      <div class="actions">
+        <button id="speakButton" type="button">SPEAK INTO THE FEED</button>
+        <button id="hangupButton" class="secondary" type="button" hidden>END TRANSMISSION</button>
+      </div>
+
+      <section class="status-grid" aria-label="Feed status">
+        <div>
+          <span>COUNTDOWN</span>
+          <strong id="timer">00:15</strong>
+        </div>
+        <div>
+          <span>RECEIVER</span>
+          <strong id="receiverLabel">SCANNING</strong>
+        </div>
+        <div>
+          <span>ROOM</span>
+          <strong id="roomLabel">SCANNING</strong>
+        </div>
+      </section>
+    </main>
+
+    <script src="/config.js"></script>
+    <script src="/signal.js"></script>
+  </body>
+</html>
