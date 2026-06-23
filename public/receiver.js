@@ -9,6 +9,7 @@
   const countdownState = document.getElementById("countdownState");
   const outputState = document.getElementById("outputState");
   const remoteAudio = document.getElementById("remoteAudio");
+  const armAudioButton = document.getElementById("armAudioButton");
   const muteButton = document.getElementById("muteButton");
   const disconnectButton = document.getElementById("disconnectButton");
 
@@ -22,6 +23,7 @@
   let peer = null;
   let activeCallerId = null;
   let muted = false;
+  let outputArmed = false;
 
   function setReceiverStatus(text) {
     receiverStatus.textContent = text;
@@ -62,6 +64,27 @@
     activeCallerId = null;
   }
 
+  async function playRemoteAudio() {
+    remoteAudio.muted = muted;
+    remoteAudio.volume = 1;
+
+    try {
+      await remoteAudio.play();
+      outputState.textContent = muted ? "LIVE AUDIO MUTED" : "LIVE AUDIO ROUTING TO BROWSER OUTPUT";
+      armAudioButton.hidden = true;
+    } catch (error) {
+      outputState.textContent = "PRESS ARM AUDIO OUTPUT";
+      armAudioButton.hidden = false;
+    }
+  }
+
+  async function armAudioOutput() {
+    outputArmed = true;
+    outputState.textContent = "AUDIO OUTPUT ARMED";
+    armAudioButton.hidden = true;
+    if (remoteAudio.srcObject) await playRemoteAudio();
+  }
+
   async function answerOffer(callerId, sdp) {
     cleanupPeer();
     activeCallerId = callerId;
@@ -70,12 +93,12 @@
     peer.ontrack = (event) => {
       const [stream] = event.streams;
       remoteAudio.srcObject = stream;
-      remoteAudio.muted = muted;
-      remoteAudio.play().then(() => {
-        outputState.textContent = "LIVE AUDIO ROUTING TO BROWSER OUTPUT";
-      }).catch(() => {
-        outputState.textContent = "PRESS PLAY TO ARM AUDIO OUTPUT";
-      });
+      if (outputArmed) {
+        playRemoteAudio();
+      } else {
+        outputState.textContent = "PRESS ARM AUDIO OUTPUT";
+        armAudioButton.hidden = false;
+      }
     };
 
     peer.onicecandidate = (event) => {
@@ -149,6 +172,14 @@
 
   muteButton.addEventListener("click", async () => {
     await postJson("/api/receiver/mute", { clientId, muted: !muted });
+  });
+
+  armAudioButton.addEventListener("click", () => {
+    armAudioOutput().catch(() => {
+      outputArmed = false;
+      armAudioButton.hidden = false;
+      outputState.textContent = "AUDIO OUTPUT BLOCKED";
+    });
   });
 
   disconnectButton.addEventListener("click", async () => {

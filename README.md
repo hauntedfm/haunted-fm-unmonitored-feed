@@ -58,7 +58,7 @@ After deploying this app to Render:
     src="https://YOUR-RENDER-APP.onrender.com/"
     title="Haunted FM Speak Into The Feed"
     style="display:block;width:100%;height:100%;border:0;background:#050505;"
-    allow="microphone; autoplay"
+    allow="microphone *; autoplay *"
   ></iframe>
 </div>
 ```
@@ -72,7 +72,7 @@ For Squarespace sections where `100vh` is too tall in the editor, use this dynam
   src="https://YOUR-RENDER-APP.onrender.com/"
   title="Haunted FM Speak Into The Feed"
   style="display:block;width:100%;height:clamp(760px,100vh,980px);border:0;background:#050505;"
-  allow="microphone; autoplay"
+  allow="microphone *; autoplay *"
 ></iframe>
 ```
 
@@ -83,7 +83,7 @@ If Squarespace does not preserve `100svh`, use this fallback:
   src="https://YOUR-RENDER-APP.onrender.com/"
   title="Haunted FM Speak Into The Feed"
   style="display:block;width:100%;height:900px;border:0;background:#050505;"
-  allow="microphone; autoplay"
+  allow="microphone *; autoplay *"
 ></iframe>
 ```
 
