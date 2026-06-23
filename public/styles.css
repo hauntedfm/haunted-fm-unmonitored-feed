@@ -7,6 +7,7 @@
   --green: #9be072;
   --line: rgba(246, 240, 221, 0.22);
   --panel: rgba(6, 6, 5, 0.88);
+  --page-pad: clamp(10px, 2vw, 18px);
 }
 
 * {
@@ -19,14 +20,18 @@
 
 html,
 body {
+  width: 100%;
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
 }
 
 body {
   display: grid;
   place-items: center;
-  padding: 16px;
+  min-width: 0;
+  min-height: 100svh;
+  padding: var(--page-pad);
   background:
     linear-gradient(rgba(246, 240, 221, 0.055) 1px, transparent 1px),
     linear-gradient(90deg, rgba(246, 240, 221, 0.035) 1px, transparent 1px),
@@ -43,12 +48,13 @@ input {
 }
 
 .signal-shell {
+  max-width: 100%;
   width: 100%;
 }
 
 .feed-console {
-  width: min(100%, 760px);
-  min-height: min(880px, calc(100vh - 32px));
+  width: min(100%, 980px);
+  min-height: calc(100svh - (var(--page-pad) * 2));
   display: grid;
   grid-template-rows: auto 1fr auto auto auto auto;
   gap: 18px;
@@ -65,14 +71,15 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
   border-bottom: 1px solid var(--line);
   padding: 12px 14px;
 }
 
 .topline img,
 .receiver-logo {
-  width: min(48vw, 280px);
-  min-width: 160px;
+  width: clamp(138px, 42vw, 280px);
+  min-width: 0;
   filter: drop-shadow(0 0 18px rgba(240, 74, 55, 0.34));
 }
 
@@ -87,6 +94,7 @@ dt {
   font-weight: 950;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .stage {
@@ -109,7 +117,8 @@ dt {
 }
 
 .duration {
-  font-size: clamp(100px, 28vw, 218px);
+  max-width: 100%;
+  font-size: clamp(76px, 24vw, 218px);
   font-weight: 950;
   line-height: 0.78;
 }
@@ -130,8 +139,10 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(36px, 9vw, 78px);
+  max-width: 100%;
+  font-size: clamp(32px, 8vw, 78px);
   line-height: 0.84;
+  overflow-wrap: anywhere;
 }
 
 .copy p {
@@ -186,6 +197,8 @@ button {
   font-weight: 950;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .secondary {
@@ -281,6 +294,56 @@ dl div {
 }
 
 @media (max-width: 760px) {
+  :root {
+    --page-pad: 0px;
+  }
+
+  body {
+    place-items: stretch;
+  }
+
+  .feed-console {
+    width: 100%;
+    min-height: 100svh;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .topline {
+    gap: 10px;
+  }
+
+  .topline span,
+  .eyebrow,
+  .status,
+  .seconds,
+  .status-grid span,
+  dt {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  .stage {
+    padding: 22px 12px 0;
+  }
+
+  .duration {
+    font-size: clamp(68px, 26vw, 118px);
+  }
+
+  .copy {
+    padding: 0 16px;
+  }
+
+  h1 {
+    font-size: clamp(30px, 12vw, 48px);
+    line-height: 0.9;
+  }
+
+  .copy p {
+    font-size: 15px;
+  }
+
   .status-grid,
   .receiver-grid {
     grid-template-columns: 1fr;
