@@ -53,7 +53,7 @@ PUBLIC_ORIGIN=*
 After deploying this app to Render:
 
 ```html
-<div style="width:100%;height:100svh;min-height:760px;overflow:hidden;background:#050505;">
+<div style="width:100%;height:100vh;min-height:760px;overflow:hidden;background:#050505;">
   <iframe
     src="https://YOUR-RENDER-APP.onrender.com/"
     title="Haunted FM Speak Into The Feed"
@@ -64,6 +64,17 @@ After deploying this app to Render:
 ```
 
 This embed stays in normal page flow. It does not use `position: fixed`, so it should not cover the Squarespace editor controls.
+
+For Squarespace sections where `100vh` is too tall in the editor, use this dynamic page-width fallback:
+
+```html
+<iframe
+  src="https://YOUR-RENDER-APP.onrender.com/"
+  title="Haunted FM Speak Into The Feed"
+  style="display:block;width:100%;height:clamp(760px,100vh,980px);border:0;background:#050505;"
+  allow="microphone; autoplay"
+></iframe>
+```
 
 If Squarespace does not preserve `100svh`, use this fallback:
 

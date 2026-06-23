@@ -53,12 +53,12 @@ input {
 }
 
 .feed-console {
-  width: min(100%, 980px);
+  width: 100%;
   min-height: calc(100svh - (var(--page-pad) * 2));
   display: grid;
   grid-template-rows: auto 1fr auto auto auto auto;
   gap: 18px;
-  margin: 0 auto;
+  margin: 0;
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.56);
@@ -246,7 +246,7 @@ dd {
 
 .receiver-grid {
   display: grid;
-  width: min(100%, 1040px);
+  width: 100%;
   grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
   gap: 18px;
 }
