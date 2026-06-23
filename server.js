@@ -131,6 +131,19 @@ function serveStatic(requestPath, res) {
 
   fs.readFile(filePath, (error, contents) => {
     if (error) {
+      if (shouldServeAppShell(requestPath)) {
+        fs.readFile(path.join(PUBLIC_DIR, "index.html"), (fallbackError, fallbackContents) => {
+          if (fallbackError) {
+            sendJson(res, 404, { ok: false, error: "Not found" });
+            return;
+          }
+
+          res.writeHead(200, { "Content-Type": mimeTypes[".html"] });
+          res.end(fallbackContents);
+        });
+        return;
+      }
+
       sendJson(res, 404, { ok: false, error: "Not found" });
       return;
     }
@@ -138,6 +151,11 @@ function serveStatic(requestPath, res) {
     res.writeHead(200, { "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream" });
     res.end(contents);
   });
+}
+
+function shouldServeAppShell(requestPath) {
+  if (requestPath.startsWith("/api/") || requestPath === "/events" || requestPath === "/health") return false;
+  return !path.extname(requestPath);
 }
 
 function openEvents(req, res, url) {
