@@ -10,15 +10,10 @@
   const hangupButton = document.getElementById("hangupButton");
   const meterBars = Array.from(document.querySelectorAll(".meter i"));
 
-  const rtcConfig = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" }
-    ]
-  };
-
   let events = null;
-  let peer = null;
   let localStream = null;
+  let recorder = null;
+  let recordedChunks = [];
   let countdown = null;
   let durationTicker = null;
   let startedAt = null;
@@ -37,24 +32,7 @@
       if (!localStream) timerText.textContent = formatTime(maxSeconds);
     });
 
-    events.addEventListener("webrtc:answer", async (event) => {
-      if (!peer) return;
-      const { sdp } = JSON.parse(event.data);
-      await peer.setRemoteDescription(new RTCSessionDescription(sdp));
-    });
-
-    events.addEventListener("webrtc:ice-candidate", async (event) => {
-      if (!peer) return;
-      const { candidate } = JSON.parse(event.data);
-      if (candidate) await peer.addIceCandidate(new RTCIceCandidate(candidate));
-    });
-
     events.addEventListener("caller:occupied", () => resetUi("THE FREQUENCY IS OCCUPIED"));
-    events.addEventListener("caller:no-receiver", () => resetUi("RECEIVER OFFLINE"));
-    events.addEventListener("caller:muted", (event) => {
-      const { muted } = JSON.parse(event.data);
-      setStatus(muted ? "RECEIVER MUTED THE FEED" : "TRANSMITTING INTO FEED");
-    });
     events.addEventListener("call:ended", (event) => {
       const { reason } = JSON.parse(event.data);
       cleanupMedia();
@@ -143,11 +121,11 @@
   }
 
   function cleanupMedia() {
-    if (peer) {
-      peer.onicecandidate = null;
-      peer.close();
-      peer = null;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
     }
+    recorder = null;
+    recordedChunks = [];
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       localStream = null;
@@ -181,32 +159,13 @@
         video: false
       });
 
-      peer = new RTCPeerConnection(rtcConfig);
-      localStream.getAudioTracks().forEach((track) => peer.addTrack(track, localStream));
-      peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          postJson("/api/signal", {
-            clientId,
-            type: "ice-candidate",
-            payload: { candidate: event.candidate }
-          });
-        }
-      };
-
-      const offer = await peer.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: false });
-      await peer.setLocalDescription(offer);
-      await postJson("/api/signal", {
-        clientId,
-        type: "offer",
-        payload: { sdp: peer.localDescription }
-      });
-
-      setStatus("TRANSMITTING INTO FEED");
+      setStatus("RECORDING TRANSMISSION FILE");
       speakButton.hidden = true;
       hangupButton.hidden = false;
       startCountdown();
       startDuration();
       startMeter(localStream);
+      startRecording(localStream);
     } catch (error) {
       await postJson("/api/hangup", { clientId });
       cleanupMedia();
@@ -214,8 +173,70 @@
     }
   }
 
+  function chooseMimeType() {
+    const options = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg"
+    ];
+    return options.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+  }
+
+  function startRecording(stream) {
+    recordedChunks = [];
+    recorder = new MediaRecorder(stream, chooseMimeType() ? { mimeType: chooseMimeType() } : undefined);
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data && event.data.size) recordedChunks.push(event.data);
+    });
+
+    recorder.addEventListener("stop", () => {
+      uploadRecording().catch(() => resetUi("FILE DELIVERY FAILED"));
+    });
+
+    recorder.start();
+    setTimeout(() => {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+    }, maxSeconds * 1000);
+  }
+
+  async function uploadRecording() {
+    stopDuration();
+    stopMeter();
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+      localStream = null;
+    }
+
+    const type = recorder && recorder.mimeType ? recorder.mimeType : "audio/webm";
+    const blob = new Blob(recordedChunks, { type });
+    setStatus("DELIVERING SIGNAL FILE");
+
+    const response = await fetch(`${backendBase}/api/recording?clientId=${encodeURIComponent(clientId)}`, {
+      method: "POST",
+      headers: { "Content-Type": type },
+      body: blob
+    });
+    const result = await response.json();
+
+    if (!result.ok) {
+      await postJson("/api/hangup", { clientId });
+      resetUi("FILE DELIVERY FAILED");
+      return;
+    }
+
+    resetUi("SIGNAL FILE DELIVERED");
+  }
+
   speakButton.addEventListener("click", beginTransmission);
   hangupButton.addEventListener("click", async () => {
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+      hangupButton.disabled = true;
+      setStatus("DELIVERING SIGNAL FILE");
+      return;
+    }
     await postJson("/api/hangup", { clientId });
     cleanupMedia();
     resetUi("SIGNAL LOST");

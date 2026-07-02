@@ -10,6 +10,10 @@ const RECEIVER_TOKEN = process.env.RECEIVER_TOKEN || "change-me-feed";
 const MAX_CALL_SECONDS = Number(process.env.MAX_CALL_SECONDS || 15);
 const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || "*";
 const PUBLIC_DIR = path.join(__dirname, "public");
+const RECORDINGS_DIR = path.join(__dirname, "recordings");
+const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 12 * 1024 * 1024);
+
+fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
 const clients = new Map();
 const room = {
@@ -26,6 +30,10 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webm": "audio/webm",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
   ".png": "image/png",
   ".svg": "image/svg+xml"
 };
@@ -43,7 +51,10 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, health());
     if (req.method === "GET" && url.pathname === "/events") return openEvents(req, res, url);
+    if (req.method === "GET" && url.pathname === "/api/recordings") return listRecordings(req, res, url);
+    if (req.method === "GET" && url.pathname.startsWith("/recordings/")) return serveRecording(url.pathname, res, url);
     if (req.method === "POST" && url.pathname === "/api/transmit") return requestTransmission(req, res);
+    if (req.method === "POST" && url.pathname === "/api/recording") return receiveRecording(req, res, url);
     if (req.method === "POST" && url.pathname === "/api/hangup") return callerHangup(req, res);
     if (req.method === "POST" && url.pathname === "/api/receiver/mute") return receiverMute(req, res);
     if (req.method === "POST" && url.pathname === "/api/receiver/disconnect") return receiverDisconnect(req, res);
@@ -119,6 +130,23 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+async function readBuffer(req, maxBytes) {
+  const chunks = [];
+  let total = 0;
+
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      const error = new Error("Upload too large");
+      error.code = "UPLOAD_TOO_LARGE";
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks);
+}
+
 function serveStatic(requestPath, res) {
   const safePath = requestPath === "/" ? "/index.html" : requestPath;
   const filePath = path.normalize(path.join(PUBLIC_DIR, safePath));
@@ -154,8 +182,61 @@ function serveStatic(requestPath, res) {
 }
 
 function shouldServeAppShell(requestPath) {
-  if (requestPath.startsWith("/api/") || requestPath === "/events" || requestPath === "/health") return false;
+  if (requestPath.startsWith("/api/") || requestPath.startsWith("/recordings/") || requestPath === "/events" || requestPath === "/health") return false;
   return !path.extname(requestPath);
+}
+
+function requireReceiverToken(res, token) {
+  if (token !== RECEIVER_TOKEN) {
+    sendJson(res, 401, { ok: false, error: "Unauthorized receiver token" });
+    return false;
+  }
+  return true;
+}
+
+function recordingUrl(fileName) {
+  return `/recordings/${encodeURIComponent(fileName)}`;
+}
+
+function listRecordings(req, res, url) {
+  if (!requireReceiverToken(res, url.searchParams.get("token"))) return;
+
+  fs.readdir(RECORDINGS_DIR, { withFileTypes: true }, (error, entries) => {
+    if (error) return sendJson(res, 200, { ok: true, recordings: [] });
+
+    const recordings = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const filePath = path.join(RECORDINGS_DIR, entry.name);
+        const stat = fs.statSync(filePath);
+        return {
+          name: entry.name,
+          size: stat.size,
+          createdAt: stat.birthtime.toISOString(),
+          url: recordingUrl(entry.name)
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    sendJson(res, 200, { ok: true, recordings });
+  });
+}
+
+function serveRecording(requestPath, res, url) {
+  if (!requireReceiverToken(res, url.searchParams.get("token"))) return;
+
+  const fileName = decodeURIComponent(requestPath.replace("/recordings/", ""));
+  const safeName = path.basename(fileName);
+  const filePath = path.join(RECORDINGS_DIR, safeName);
+
+  fs.readFile(filePath, (error, contents) => {
+    if (error) return sendJson(res, 404, { ok: false, error: "Recording not found" });
+    res.writeHead(200, {
+      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${safeName}"`
+    });
+    res.end(contents);
+  });
 }
 
 function openEvents(req, res, url) {
@@ -236,11 +317,6 @@ async function requestTransmission(req, res) {
   const { clientId } = await readJson(req);
   if (!clientId) return sendJson(res, 400, { ok: false, reason: "SIGNAL FAILED" });
 
-  if (!room.receiverId) {
-    sendEvent(clientId, "caller:no-receiver", {});
-    return sendJson(res, 409, { ok: false, reason: "RECEIVER OFFLINE" });
-  }
-
   if (room.activeCallerId && room.activeCallerId !== clientId) {
     sendEvent(clientId, "caller:occupied", {});
     return sendJson(res, 409, { ok: false, reason: "THE FREQUENCY IS OCCUPIED" });
@@ -250,16 +326,52 @@ async function requestTransmission(req, res) {
   room.startedAt = Date.now();
   room.muted = false;
   clearTimers();
-  room.disconnectTimer = setTimeout(() => endTransmission("SIGNAL LOST"), MAX_CALL_SECONDS * 1000);
+  room.disconnectTimer = setTimeout(() => endTransmission("SIGNAL LOST"), (MAX_CALL_SECONDS + 8) * 1000);
   room.statusTimer = setInterval(broadcastStatus, 1000);
 
-  sendEvent(room.receiverId, "receiver:incoming-caller", {
-    callerId: clientId,
-    startedAt: room.startedAt
-  });
+  if (room.receiverId) {
+    sendEvent(room.receiverId, "receiver:incoming-caller", {
+      callerId: clientId,
+      startedAt: room.startedAt
+    });
+  }
   sendEvent(clientId, "caller:accepted", roomStatus());
   broadcastStatus();
   sendJson(res, 200, { ok: true, status: roomStatus() });
+}
+
+async function receiveRecording(req, res, url) {
+  const clientId = url.searchParams.get("clientId");
+  if (!clientId || clientId !== room.activeCallerId) {
+    return sendJson(res, 409, { ok: false, error: "No active transmission" });
+  }
+
+  try {
+    const contentType = req.headers["content-type"] || "audio/webm";
+    const extension = contentType.includes("ogg") ? ".ogg" : contentType.includes("wav") ? ".wav" : ".webm";
+    const safeClient = clientId.replace(/[^a-z0-9-]/gi, "").slice(0, 12);
+    const fileName = `${new Date().toISOString().replace(/[:.]/g, "-")}-${safeClient}${extension}`;
+    const filePath = path.join(RECORDINGS_DIR, fileName);
+    const buffer = await readBuffer(req, MAX_UPLOAD_BYTES);
+
+    if (!buffer.length) return sendJson(res, 400, { ok: false, error: "Empty recording" });
+
+    fs.writeFileSync(filePath, buffer);
+
+    const recording = {
+      name: fileName,
+      size: buffer.length,
+      createdAt: new Date().toISOString(),
+      url: recordingUrl(fileName)
+    };
+
+    if (room.receiverId) sendEvent(room.receiverId, "receiver:recording-ready", recording);
+    endTransmission("SIGNAL FILE DELIVERED");
+    sendJson(res, 200, { ok: true, recording });
+  } catch (error) {
+    if (error.code === "UPLOAD_TOO_LARGE") return sendJson(res, 413, { ok: false, error: "Recording too large" });
+    sendJson(res, 500, { ok: false, error: "Recording failed" });
+  }
 }
 
 async function callerHangup(req, res) {

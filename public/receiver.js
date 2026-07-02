@@ -8,6 +8,7 @@
   const roomState = document.getElementById("roomState");
   const countdownState = document.getElementById("countdownState");
   const outputState = document.getElementById("outputState");
+  const recordingList = document.getElementById("recordingList");
   const remoteAudio = document.getElementById("remoteAudio");
   const armAudioButton = document.getElementById("armAudioButton");
   const muteButton = document.getElementById("muteButton");
@@ -42,6 +43,48 @@
       body: JSON.stringify(body)
     });
     return response.json();
+  }
+
+  function authedRecordingUrl(recording) {
+    return `${backendBase}${recording.url}?token=${encodeURIComponent(receiverToken)}`;
+  }
+
+  function renderRecordings(recordings) {
+    recordingList.innerHTML = "";
+
+    if (!recordings.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-list";
+      empty.textContent = "NO FILES RECOVERED";
+      recordingList.appendChild(empty);
+      return;
+    }
+
+    recordings.forEach((recording) => {
+      const item = document.createElement("article");
+      item.className = "recording-card";
+
+      const title = document.createElement("strong");
+      title.textContent = new Date(recording.createdAt).toLocaleString();
+
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.src = authedRecordingUrl(recording);
+
+      const link = document.createElement("a");
+      link.href = authedRecordingUrl(recording);
+      link.download = recording.name;
+      link.textContent = "DOWNLOAD FILE";
+
+      item.append(title, audio, link);
+      recordingList.appendChild(item);
+    });
+  }
+
+  async function loadRecordings() {
+    const response = await fetch(`${backendBase}/api/recordings?token=${encodeURIComponent(receiverToken)}`);
+    const data = await response.json();
+    if (data.ok) renderRecordings(data.recordings || []);
   }
 
   function updateStatus(status) {
@@ -174,6 +217,13 @@
       setReceiverStatus(reason || "SIGNAL LOST");
       outputState.textContent = "ROUTE THIS BROWSER AUDIO INTO THE FEED";
     });
+    events.addEventListener("receiver:recording-ready", () => {
+      setReceiverStatus("SIGNAL FILE RECOVERED");
+      outputState.textContent = "NEW AUDIO FILE READY";
+      loadRecordings().catch(() => {
+        outputState.textContent = "FILE LIST UPDATE FAILED";
+      });
+    });
   }
 
   muteButton.addEventListener("click", async () => {
@@ -205,6 +255,9 @@
   });
 
   connectReceiver();
+  loadRecordings().catch(() => {
+    outputState.textContent = "FILE LIST UNAVAILABLE";
+  });
   if (outputArmed) {
     armAudioButton.hidden = true;
     outputState.textContent = "AUDIO OUTPUT AUTO-ARMED";

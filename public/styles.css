@@ -281,6 +281,31 @@ audio {
   width: 100%;
 }
 
+.recording-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recording-card {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.recording-card a,
+.empty-list {
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.recording-card a {
+  text-decoration: none;
+}
+
 .receiver-actions {
   display: flex;
   flex-wrap: wrap;
