@@ -123,9 +123,10 @@
 
   function showLocalDownload(blob) {
     if (localDownloadLink) localDownloadLink.remove();
+    const extension = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
     localDownloadLink = document.createElement("a");
     localDownloadLink.href = URL.createObjectURL(blob);
-    localDownloadLink.download = `haunted-fm-transmission-${Date.now()}.webm`;
+    localDownloadLink.download = `haunted-fm-transmission-${Date.now()}.${extension}`;
     localDownloadLink.textContent = "DOWNLOAD LOCAL FILE";
     localDownloadLink.className = "local-download";
     hangupButton.insertAdjacentElement("afterend", localDownloadLink);
@@ -186,6 +187,7 @@
 
   function chooseMimeType() {
     const options = [
+      "audio/mp4",
       "audio/webm;codecs=opus",
       "audio/webm",
       "audio/ogg;codecs=opus",

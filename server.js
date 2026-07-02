@@ -33,6 +33,8 @@ const mimeTypes = {
   ".webm": "audio/webm",
   ".ogg": "audio/ogg",
   ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".mp4": "audio/mp4",
   ".mp3": "audio/mpeg",
   ".png": "image/png",
   ".svg": "image/svg+xml"
@@ -350,7 +352,7 @@ async function receiveRecording(req, res, url) {
 
   try {
     const contentType = req.headers["content-type"] || "audio/webm";
-    const extension = contentType.includes("ogg") ? ".ogg" : contentType.includes("wav") ? ".wav" : ".webm";
+    const extension = contentType.includes("mp4") ? ".m4a" : contentType.includes("ogg") ? ".ogg" : contentType.includes("wav") ? ".wav" : ".webm";
     const safeClient = clientId.replace(/[^a-z0-9-]/gi, "").slice(0, 12);
     const fileName = `${new Date().toISOString().replace(/[:.]/g, "-")}-${safeClient}${extension}`;
     const filePath = path.join(RECORDINGS_DIR, fileName);

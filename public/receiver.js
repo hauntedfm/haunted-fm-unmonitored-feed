@@ -11,6 +11,7 @@
   const recordingList = document.getElementById("recordingList");
   const remoteAudio = document.getElementById("remoteAudio");
   const armAudioButton = document.getElementById("armAudioButton");
+  const playLatestButton = document.getElementById("playLatestButton");
   const muteButton = document.getElementById("muteButton");
   const disconnectButton = document.getElementById("disconnectButton");
 
@@ -27,6 +28,7 @@
   let activeCallerId = null;
   let muted = false;
   let outputArmed = localStorage.getItem(ARM_STORAGE_KEY) === "true";
+  let latestRecoveredAudio = null;
 
   function setReceiverStatus(text) {
     receiverStatus.textContent = text;
@@ -55,6 +57,8 @@
 
   function renderRecordings(recordings, options = {}) {
     recordingList.innerHTML = "";
+    latestRecoveredAudio = null;
+    playLatestButton.disabled = true;
 
     if (!recordings.length) {
       const empty = document.createElement("p");
@@ -73,6 +77,7 @@
 
       const audio = document.createElement("audio");
       audio.controls = true;
+      audio.preload = "metadata";
       audio.src = authedRecordingUrl(recording);
 
       const link = document.createElement("a");
@@ -86,16 +91,32 @@
       recordingList.appendChild(item);
     });
 
+    latestRecoveredAudio = recordingList.querySelector("audio");
+    playLatestButton.disabled = !latestRecoveredAudio;
+
     if (options.autoplayNewest && outputArmed) {
-      const newestAudio = recordingList.querySelector("audio");
-      if (newestAudio) {
-        newestAudio.play().then(() => {
+      if (latestRecoveredAudio) {
+        latestRecoveredAudio.play().then(() => {
           outputState.textContent = "PLAYING RECOVERED FILE";
         }).catch(() => {
-          outputState.textContent = "PRESS PLAY ON RECOVERED FILE";
+          outputState.textContent = "PRESS PLAY LATEST FILE";
         });
       }
     }
+  }
+
+  async function playLatestRecoveredFile() {
+    if (!latestRecoveredAudio) {
+      outputState.textContent = "NO RECOVERED FILE READY";
+      return;
+    }
+
+    outputArmed = true;
+    localStorage.setItem(ARM_STORAGE_KEY, "true");
+    armAudioButton.hidden = true;
+    latestRecoveredAudio.currentTime = 0;
+    await latestRecoveredAudio.play();
+    outputState.textContent = "PLAYING RECOVERED FILE";
   }
 
   async function loadRecordings(options = {}) {
@@ -253,6 +274,12 @@
       localStorage.removeItem(ARM_STORAGE_KEY);
       armAudioButton.hidden = false;
       outputState.textContent = "AUDIO OUTPUT BLOCKED";
+    });
+  });
+
+  playLatestButton.addEventListener("click", () => {
+    playLatestRecoveredFile().catch(() => {
+      outputState.textContent = "PRESS PLAY ON FILE CONTROL";
     });
   });
 
