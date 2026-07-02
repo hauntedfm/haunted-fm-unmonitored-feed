@@ -15,6 +15,10 @@
   let localStream = null;
   let recorder = null;
   let recordedChunks = [];
+  let recordingStopTimer = null;
+  let uploadInProgress = false;
+  let recordingFinished = false;
+  let recorderMimeType = "";
   let countdown = null;
   let durationTicker = null;
   let startedAt = null;
@@ -36,6 +40,7 @@
     events.addEventListener("caller:occupied", () => resetUi("THE FREQUENCY IS OCCUPIED"));
     events.addEventListener("call:ended", (event) => {
       const { reason } = JSON.parse(event.data);
+      if (reason === "SIGNAL FILE DELIVERED" || uploadInProgress || recordingFinished) return;
       cleanupMedia();
       resetUi(reason || "SIGNAL LOST");
     });
@@ -115,6 +120,7 @@
     speakButton.hidden = false;
     speakButton.disabled = false;
     hangupButton.hidden = true;
+    hangupButton.disabled = false;
     timerText.textContent = formatTime(maxSeconds);
     clearInterval(countdown);
     stopDuration();
@@ -133,11 +139,16 @@
   }
 
   function cleanupMedia() {
-    if (recorder && recorder.state !== "inactive") {
+    clearTimeout(recordingStopTimer);
+    recordingStopTimer = null;
+    if (!uploadInProgress && recorder && recorder.state !== "inactive") {
       recorder.stop();
     }
     recorder = null;
     recordedChunks = [];
+    recorderMimeType = "";
+    recordingFinished = false;
+    uploadInProgress = false;
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       localStream = null;
@@ -161,6 +172,9 @@
 
     try {
       maxSeconds = access.status.maxCallSeconds || maxSeconds;
+      if (!window.MediaRecorder) {
+        throw new Error("MediaRecorder unsupported");
+      }
       setStatus("MICROPHONE DETECTED");
       localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -174,6 +188,7 @@
       setStatus("RECORDING TRANSMISSION FILE");
       speakButton.hidden = true;
       hangupButton.hidden = false;
+      hangupButton.disabled = false;
       startCountdown();
       startDuration();
       startMeter(localStream);
@@ -186,6 +201,7 @@
   }
 
   function chooseMimeType() {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
     const options = [
       "audio/mp4",
       "audio/webm;codecs=opus",
@@ -198,23 +214,45 @@
 
   function startRecording(stream) {
     recordedChunks = [];
-    recorder = new MediaRecorder(stream, chooseMimeType() ? { mimeType: chooseMimeType() } : undefined);
+    recorderMimeType = chooseMimeType();
+    recorder = new MediaRecorder(stream, recorderMimeType ? { mimeType: recorderMimeType } : undefined);
+    recorderMimeType = recorder.mimeType || recorderMimeType || "audio/webm";
+    recordingFinished = false;
+    uploadInProgress = false;
 
     recorder.addEventListener("dataavailable", (event) => {
       if (event.data && event.data.size) recordedChunks.push(event.data);
     });
 
     recorder.addEventListener("stop", () => {
-      uploadRecording().catch(() => resetUi("FILE DELIVERY FAILED"));
-    });
+      recordingFinished = true;
+      uploadRecording().catch(() => {
+        uploadInProgress = false;
+        resetUi("FILE DELIVERY FAILED");
+      });
+    }, { once: true });
 
-    recorder.start();
-    setTimeout(() => {
-      if (recorder && recorder.state !== "inactive") recorder.stop();
+    recorder.start(1000);
+    clearTimeout(recordingStopTimer);
+    recordingStopTimer = setTimeout(() => {
+      stopRecorderForUpload();
     }, maxSeconds * 1000);
   }
 
+  function stopRecorderForUpload() {
+    if (!recorder || recorder.state === "inactive") return;
+    try {
+      recorder.requestData();
+    } catch (error) {
+      // Some browsers do not allow requestData at this exact moment.
+    }
+    recorder.stop();
+  }
+
   async function uploadRecording() {
+    uploadInProgress = true;
+    clearTimeout(recordingStopTimer);
+    recordingStopTimer = null;
     stopDuration();
     stopMeter();
     if (localStream) {
@@ -222,7 +260,15 @@
       localStream = null;
     }
 
-    const type = recorder && recorder.mimeType ? recorder.mimeType : "audio/webm";
+    if (!recordedChunks.length) {
+      await postJson("/api/hangup", { clientId });
+      cleanupMedia();
+      resetUi("NO AUDIO CAPTURED - TRY AGAIN");
+      return;
+    }
+
+    const firstChunkType = recordedChunks.find((chunk) => chunk.type)?.type;
+    const type = recorderMimeType || firstChunkType || "audio/webm";
     const blob = new Blob(recordedChunks, { type });
     showLocalDownload(blob);
     setStatus("DELIVERING SIGNAL FILE");
@@ -232,23 +278,29 @@
       headers: { "Content-Type": type },
       body: blob
     });
-    const result = await response.json();
+    const result = await response.json().catch(() => ({ ok: false }));
 
-    if (!result.ok) {
+    if (!response.ok || !result.ok) {
       await postJson("/api/hangup", { clientId });
+      uploadInProgress = false;
       resetUi("FILE DELIVERY FAILED - DOWNLOAD LOCAL FILE");
       return;
     }
 
+    recordedChunks = [];
+    recorder = null;
+    recorderMimeType = "";
+    uploadInProgress = false;
+    recordingFinished = false;
     resetUi("SIGNAL FILE DELIVERED");
   }
 
   speakButton.addEventListener("click", beginTransmission);
   hangupButton.addEventListener("click", async () => {
     if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
       hangupButton.disabled = true;
       setStatus("DELIVERING SIGNAL FILE");
+      stopRecorderForUpload();
       return;
     }
     await postJson("/api/hangup", { clientId });

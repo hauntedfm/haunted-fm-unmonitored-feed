@@ -330,7 +330,7 @@ async function requestTransmission(req, res) {
   room.startedAt = Date.now();
   room.muted = false;
   clearTimers();
-  room.disconnectTimer = setTimeout(() => endTransmission("SIGNAL LOST"), (MAX_CALL_SECONDS + 8) * 1000);
+  room.disconnectTimer = setTimeout(() => endTransmission("SIGNAL LOST"), (MAX_CALL_SECONDS + 25) * 1000);
   room.statusTimer = setInterval(broadcastStatus, 1000);
 
   if (room.receiverId) {
