@@ -19,11 +19,13 @@
     ]
   };
 
+  const ARM_STORAGE_KEY = "hauntedFmAudioOutputArmed";
+
   let events = null;
   let peer = null;
   let activeCallerId = null;
   let muted = false;
-  let outputArmed = false;
+  let outputArmed = localStorage.getItem(ARM_STORAGE_KEY) === "true";
 
   function setReceiverStatus(text) {
     receiverStatus.textContent = text;
@@ -70,9 +72,12 @@
 
     try {
       await remoteAudio.play();
+      outputArmed = true;
+      localStorage.setItem(ARM_STORAGE_KEY, "true");
       outputState.textContent = muted ? "LIVE AUDIO MUTED" : "LIVE AUDIO ROUTING TO BROWSER OUTPUT";
       armAudioButton.hidden = true;
     } catch (error) {
+      outputArmed = false;
       outputState.textContent = "PRESS ARM AUDIO OUTPUT";
       armAudioButton.hidden = false;
     }
@@ -80,6 +85,7 @@
 
   async function armAudioOutput() {
     outputArmed = true;
+    localStorage.setItem(ARM_STORAGE_KEY, "true");
     outputState.textContent = "AUDIO OUTPUT ARMED";
     armAudioButton.hidden = true;
     if (remoteAudio.srcObject) await playRemoteAudio();
@@ -177,10 +183,20 @@
   armAudioButton.addEventListener("click", () => {
     armAudioOutput().catch(() => {
       outputArmed = false;
+      localStorage.removeItem(ARM_STORAGE_KEY);
       armAudioButton.hidden = false;
       outputState.textContent = "AUDIO OUTPUT BLOCKED";
     });
   });
+
+  document.addEventListener("pointerdown", () => {
+    if (!outputArmed) {
+      armAudioOutput().catch(() => {
+        outputArmed = false;
+        localStorage.removeItem(ARM_STORAGE_KEY);
+      });
+    }
+  }, { once: true });
 
   disconnectButton.addEventListener("click", async () => {
     await postJson("/api/receiver/disconnect", { clientId });
@@ -189,4 +205,8 @@
   });
 
   connectReceiver();
+  if (outputArmed) {
+    armAudioButton.hidden = true;
+    outputState.textContent = "AUDIO OUTPUT AUTO-ARMED";
+  }
 })();
