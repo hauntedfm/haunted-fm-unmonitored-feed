@@ -294,6 +294,7 @@ audio {
 }
 
 .recording-card a,
+.local-download,
 .empty-list {
   color: var(--amber);
   font-size: 12px;
@@ -303,6 +304,14 @@ audio {
 }
 
 .recording-card a {
+  text-decoration: none;
+}
+
+.local-download {
+  display: inline-grid;
+  min-height: 44px;
+  place-items: center;
+  border: 1px solid var(--line);
   text-decoration: none;
 }
 

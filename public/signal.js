@@ -9,6 +9,7 @@
   const speakButton = document.getElementById("speakButton");
   const hangupButton = document.getElementById("hangupButton");
   const meterBars = Array.from(document.querySelectorAll(".meter i"));
+  let localDownloadLink = null;
 
   let events = null;
   let localStream = null;
@@ -120,6 +121,16 @@
     stopMeter();
   }
 
+  function showLocalDownload(blob) {
+    if (localDownloadLink) localDownloadLink.remove();
+    localDownloadLink = document.createElement("a");
+    localDownloadLink.href = URL.createObjectURL(blob);
+    localDownloadLink.download = `haunted-fm-transmission-${Date.now()}.webm`;
+    localDownloadLink.textContent = "DOWNLOAD LOCAL FILE";
+    localDownloadLink.className = "local-download";
+    hangupButton.insertAdjacentElement("afterend", localDownloadLink);
+  }
+
   function cleanupMedia() {
     if (recorder && recorder.state !== "inactive") {
       recorder.stop();
@@ -211,6 +222,7 @@
 
     const type = recorder && recorder.mimeType ? recorder.mimeType : "audio/webm";
     const blob = new Blob(recordedChunks, { type });
+    showLocalDownload(blob);
     setStatus("DELIVERING SIGNAL FILE");
 
     const response = await fetch(`${backendBase}/api/recording?clientId=${encodeURIComponent(clientId)}`, {
@@ -222,7 +234,7 @@
 
     if (!result.ok) {
       await postJson("/api/hangup", { clientId });
-      resetUi("FILE DELIVERY FAILED");
+      resetUi("FILE DELIVERY FAILED - DOWNLOAD LOCAL FILE");
       return;
     }
 

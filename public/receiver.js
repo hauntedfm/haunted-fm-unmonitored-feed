@@ -49,7 +49,11 @@
     return `${backendBase}${recording.url}?token=${encodeURIComponent(receiverToken)}`;
   }
 
-  function renderRecordings(recordings) {
+  function downloadRecordingUrl(recording) {
+    return `${authedRecordingUrl(recording)}&download=1`;
+  }
+
+  function renderRecordings(recordings, options = {}) {
     recordingList.innerHTML = "";
 
     if (!recordings.length) {
@@ -72,19 +76,32 @@
       audio.src = authedRecordingUrl(recording);
 
       const link = document.createElement("a");
-      link.href = authedRecordingUrl(recording);
+      link.href = downloadRecordingUrl(recording);
       link.download = recording.name;
+      link.target = "_blank";
+      link.rel = "noopener";
       link.textContent = "DOWNLOAD FILE";
 
       item.append(title, audio, link);
       recordingList.appendChild(item);
     });
+
+    if (options.autoplayNewest && outputArmed) {
+      const newestAudio = recordingList.querySelector("audio");
+      if (newestAudio) {
+        newestAudio.play().then(() => {
+          outputState.textContent = "PLAYING RECOVERED FILE";
+        }).catch(() => {
+          outputState.textContent = "PRESS PLAY ON RECOVERED FILE";
+        });
+      }
+    }
   }
 
-  async function loadRecordings() {
+  async function loadRecordings(options = {}) {
     const response = await fetch(`${backendBase}/api/recordings?token=${encodeURIComponent(receiverToken)}`);
     const data = await response.json();
-    if (data.ok) renderRecordings(data.recordings || []);
+    if (data.ok) renderRecordings(data.recordings || [], options);
   }
 
   function updateStatus(status) {
@@ -220,7 +237,7 @@
     events.addEventListener("receiver:recording-ready", () => {
       setReceiverStatus("SIGNAL FILE RECOVERED");
       outputState.textContent = "NEW AUDIO FILE READY";
-      loadRecordings().catch(() => {
+      loadRecordings({ autoplayNewest: true }).catch(() => {
         outputState.textContent = "FILE LIST UPDATE FAILED";
       });
     });

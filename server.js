@@ -231,9 +231,11 @@ function serveRecording(requestPath, res, url) {
 
   fs.readFile(filePath, (error, contents) => {
     if (error) return sendJson(res, 404, { ok: false, error: "Recording not found" });
+    const disposition = url.searchParams.get("download") === "1" ? "attachment" : "inline";
     res.writeHead(200, {
       "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
-      "Content-Disposition": `inline; filename="${safeName}"`
+      "Content-Disposition": `${disposition}; filename="${safeName}"`,
+      "Content-Length": contents.length
     });
     res.end(contents);
   });
